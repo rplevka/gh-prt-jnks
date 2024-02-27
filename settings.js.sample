@@ -1,0 +1,3 @@
+const botUsername = "Satellite-QE";
+const comment_pattern = /(Build Number: )(\d+)/;
+const jnks_job_url = `https://instance.jenkins.foo/job/${location.href.split('/')[4]}-pr-testing/`;
