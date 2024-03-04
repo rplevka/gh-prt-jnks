@@ -45,6 +45,7 @@ function appendProgressBar(data, el) {
     var totalCount = data.failCount + data.skipCount + data.passCount;
     
     var el_progressbar_cont = document.createElement('div');
+    el_progressbar_cont.classList.add('mb-3');
 
     var el_progressbar_title = document.createElement('h3');
     var el_progressbar_title_text = document.createTextNode('Build test results');
@@ -84,9 +85,11 @@ function appendResultContainer(data, el){
     data.suites[0].cases.forEach(function(c) {
         if (c.status == "FAILED"){
             var el_details = document.createElement('details');
-            el_details.setAttribute('open', '');
+            if (settings.resultsLoadExpanded) {
+                el_details.setAttribute('open', '');
+            }
             var el_summary = document.createElement('summary');
-            el_summary.classList.add('color-fg-muted', 'mr-2', 'merge-status-item');
+            el_summary.classList.add('color-fg-muted', 'merge-status-item');
             var el_err_pre = document.createElement('pre');
             var el_err = document.createElement('code');
             el_err.appendChild(document.createTextNode(c.errorDetails));
@@ -165,7 +168,7 @@ function init(){
     comments.forEach(function(comment) {
         // locate the author element and filter those from our bot
         var el_author = comment.getElementsByClassName("author");
-        if (el_author.length && el_author[0].innerHTML == botUsername) {
+        if (el_author.length && el_author[0].innerHTML == settings.botUsername) {
             // we assume PRT bot comment contains `code` element
             var els_code = document.evaluate(
                 ".//code",
@@ -182,17 +185,17 @@ function init(){
                 el_markdown_body = el_code.parentElement.parentElement.parentElement;
                 //console.log(el_code);
                 console.log(el_markdown_body);
-                var build_no = el_code.innerHTML.match(comment_pattern)[2];
+                var build_no = el_code.innerHTML.match(settings.commentPattern)[2];
                 var replacement = el_code.innerHTML.replace(
-                    comment_pattern,
-                    `$1<a href='${jnks_job_url}/$2' target='_blank'>$2</a>`
+                    settings.commentPattern,
+                    `$1<a href='${settings.jenkinsJobUrl}/$2' target='_blank'>$2</a>`
                 );
                 el_code.innerHTML = replacement;
                 var build_obj;
                 (function(e){
                     GM_xmlhttpRequest({
                         method: "GET",
-                        url: `${jnks_job_url}/${build_no}/testReport/api/json?pretty=true`,
+                        url: `${settings.jenkinsJobUrl}/${build_no}/testReport/api/json?pretty=true`,
                         onload: function(r) {
                             build_obj = handleJenkinsTestResultResponse(r, e)
                         },
