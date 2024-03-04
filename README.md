@@ -32,6 +32,7 @@ create a new user script in tampermonkey and add only the following header (do n
 
 ```
 sed -i 's/{JENKINS_DOMAIN}/your.jenkins.instance.domain/' gh-prt-jnks.user.js
+sed -i 's/{JENKINS_URL}/your.jenkins.instance.url/' settings.js # including schema (e.g. https://)
 ```
 
 Known bugs and todos
