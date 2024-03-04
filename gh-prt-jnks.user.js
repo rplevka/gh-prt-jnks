@@ -8,34 +8,104 @@
 // @run-at       document-end
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=github.com
 // @connect      {JENKINS_DOMAIN}
+// @resource jnks-err.png     https://www.jenkins.io/images/logos/fire/fire.png
 // @grant        GM_xmlhttpRequest
+// @grant        GM_getResourceURL
 // ==/UserScript==
 
 
+var sheet = window.document.styleSheets[0];
+var chartCSSRules = [
+    '.gh-prt-jnks-chart {float: left}',
+    '.chart-item-bg {stroke: #ddd}',
+    '.chart-item-0  {stroke: #f85149}', // failed 
+    '.chart-item-1  {stroke: #8b949e}', // skipped
+    '.chart-item-2  {stroke: #2ea043}'  // passed
+]
+
+function appendProgressBar(data, el) {
+    /* append a primer progressbar element to a given parent
+
+        <h2>Second Progress Bar</h2>
+        <span class="Progress Progress--large">
+            <span class="Progress-item 
+                color-bg-success-emphasis" 
+                style="width: 40%;">
+              </span>
+            <span class="Progress-item 
+                color-bg-attention-emphasis" 
+                style="width: 30%;">
+              </span>
+            <span class="Progress-item 
+                color-bg-danger-emphasis" 
+                style="width: 20%;">
+              </span>
+    */
+
+    var totalCount = data.failCount + data.skipCount + data.passCount;
+    
+    var el_progressbar_cont = document.createElement('div');
+
+    var el_progressbar_title = document.createElement('h3');
+    var el_progressbar_title_text = document.createTextNode('Build test results');
+    el_progressbar_title.appendChild(el_progressbar_title_text);
+    el_progressbar_cont.appendChild(el_progressbar_title);
+
+    var el_stats = document.createElement('span');
+    el_stats.classList.add('text-small', 'color-fg-muted', 'mr-2');
+    el_stats.innerHTML = `${data['passCount']} passed, ${data['failCount']} failed, ${data['skipCount']} skipped of ${totalCount}`;
+
+    var el_progressbar = document.createElement('span');
+    el_progressbar.classList.add('Progress');
+    el_progressbar.classList.add('Progress--large');
+    el_progressbar_cont.appendChild(el_stats);
+    el_progressbar_cont.appendChild(el_progressbar);
+    var el_progressbar_prg_failed = document.createElement('span');
+    var el_progressbar_prg_success = document.createElement('span');
+    var el_progressbar_prg_skipped = document.createElement('span');
+    el_progressbar_prg_success.classList.add('Progress-item');
+    el_progressbar_prg_success.classList.add('color-bg-success-emphasis');
+    el_progressbar_prg_failed.classList.add('Progress-item');
+    el_progressbar_prg_failed.classList.add('color-bg-danger-emphasis');
+    el_progressbar_prg_skipped.classList.add('Progress-item');
+    el_progressbar_prg_skipped.classList.add('color-bg-attention-emphasis');
+    el_progressbar_prg_success.setAttribute('style', `width: ${(data.passCount / totalCount) * 100 }%`);
+    el_progressbar_prg_failed.setAttribute('style', `width: ${(data.failCount / totalCount) * 100 }%`);
+    el_progressbar_prg_skipped.setAttribute('style', `width: ${(data.skipCount / totalCount) * 100 }%`);
+
+    el_progressbar.appendChild(el_progressbar_prg_success);
+    el_progressbar.appendChild(el_progressbar_prg_failed);
+    el_progressbar.appendChild(el_progressbar_prg_skipped);
+
+    el.appendChild(el_progressbar_cont);
+}
+
+function appendResultContainer(data, el){
+    data.suites[0].cases.forEach(function(c) {
+        if (c.status == "FAILED"){
+            var el_details = document.createElement('details');
+            el_details.setAttribute('open', '');
+            var el_summary = document.createElement('summary');
+            el_summary.classList.add('color-fg-muted', 'mr-2', 'merge-status-item');
+            var el_err_pre = document.createElement('pre');
+            var el_err = document.createElement('code');
+            el_err.appendChild(document.createTextNode(c.errorDetails));
+            el_err_pre.append(el_err);
+
+            el_summary.appendChild(document.createTextNode(`${c.className} :: ${c.name}`));
+            el_details.append(el_summary);
+            el_details.append(el_err_pre);
+
+            el.appendChild(el_details);
+        }
+    });
+}
+
 function injectErrData(data, el){
     // Inject the rendered data into given element
-    markdown_body_el = el.parentElement.parentElement.parentElement;
-    el = markdown_body_el;
-    cases = data.suites[0].cases;
-    if (cases.length > 0){
-        let table = "<table>";
-            table += "<tr>";
-            table += "<th>test name</th>";
-            table += "<th>error details</th>";
-            table += "</tr>";
-        for (var c in cases) {
-            table += "<tr>";
-            table += "<td style='word-wrap: break-word;'>";
-            table += `<p>${cases[c].className} :: ${cases[c].name}</p>`;
-            table += "</td>";
-            table += "<td style='word-wrap: break-word;'>";
-            table += `${cases[c].errorDetails ? cases[c].errorDetails : '-'}`;
-            table += "</td>";
-            table += "</tr>";
-        }
-        table += "</table>";
-        el.innerHTML += table;
-    }
+
+    appendProgressBar(data, el);
+    appendResultContainer(data, el);
 }
 
 function handleJenkinsTestResultResponse(r, el) {
@@ -46,28 +116,60 @@ function handleJenkinsTestResultResponse(r, el) {
     var buildObj;
     if (r.status == 200){
         buildObj = JSON.parse(r.responseText);
+        injectErrData(buildObj, el)
     }
     else {
-        console.log("failed to fetch data from jenkins")
-        console.log(`status: ${r.status}`);
-        console.log(`response text: ${r.responseText}`);
+        handleJenkinsRequestError(r, el);
     }
-    injectErrData(buildObj, el)
 }
 
+function handleJenkinsRequestError(r, el) {
+    /* append element with error message
+       regarding failure to fetch data from jenkins
+    */
+   el_err_msg = document.createElement('div');
+   el_err_msg.classList.add('blankslate');
 
-(async ()=>{
-    'use strict';
+   el_err_msg_img = document.createElement('img');
+   el_err_msg_img.setAttribute('src', GM_getResourceURL('jnks-err.png'));
+
+   el_err_msg_img.classList.add('blankslate-image');
+
+   el_err_msg_header = document.createElement('h3');
+   el_err_msg_header.classList.add('blankslate-heading');
+   el_err_msg_header.appendChild(document.createTextNode('Jenkins connection error'));
+   el_err_msg_text = document.createElement('p');
+   el_err_msg_text.appendChild(document.createTextNode(`The http request to the jenkins instance failed with status: ${r.status}`));
+   el_err_msg_header.appendChild(el_err_msg_text);
+
+   el_err_msg.appendChild(el_err_msg_img);
+   el_err_msg.appendChild(el_err_msg_header);
+   el.appendChild(el_err_msg);
+}
+
+function init(){
+
+    /* maybe this is not necessary at all and we can use githubs css
+    // <link href="https://unpkg.com/@primer/css@^20.2.4/dist/primer.css" rel="stylesheet" />
+    var el_primer_link = document.createElement('link');
+    el_primer_link.setAttribute('href', 'https://unpkg.com/@primer/css@^20.2.4/dist/primer.css');
+    el_primer_link.setAttribute('rel', 'stlesheet');
+    document.head.appendChild(el_primer_link);
+    */
+
+
+    console.debug("init executed");
     // get list of comment elements
-    var comments = document.getElementsByClassName("timeline-comment");
-    for (let i = 0; i < comments.length; i++) {
+    //var comments = document.getElementsByClassName("timeline-comment");
+    var comments = document.querySelectorAll(".timeline-comment");
+    comments.forEach(function(comment) {
         // locate the author element and filter those from our bot
-        var el_author = comments[i].getElementsByClassName("author");
+        var el_author = comment.getElementsByClassName("author");
         if (el_author.length && el_author[0].innerHTML == botUsername) {
-            // we assume PRT bot comment contains `code`
+            // we assume PRT bot comment contains `code` element
             var els_code = document.evaluate(
                 ".//code",
-                comments[i],
+                comment,
                 null,
                 XPathResult.ANY_TYPE,
                 null
@@ -77,6 +179,9 @@ function handleJenkinsTestResultResponse(r, el) {
                 /*  match code text against our pattern and optionally replace
                     it with the <a> node
                 */
+                el_markdown_body = el_code.parentElement.parentElement.parentElement;
+                //console.log(el_code);
+                console.log(el_markdown_body);
                 var build_no = el_code.innerHTML.match(comment_pattern)[2];
                 var replacement = el_code.innerHTML.replace(
                     comment_pattern,
@@ -84,14 +189,27 @@ function handleJenkinsTestResultResponse(r, el) {
                 );
                 el_code.innerHTML = replacement;
                 var build_obj;
-                GM_xmlhttpRequest({
-                    method: "GET",
-                    url: `${jnks_job_url}/${build_no}/testReport/api/json?pretty=true`,
-                    onload: function(r) {
-                        build_obj = handleJenkinsTestResultResponse(r, el_code)
-                    }
-                });
+                (function(e){
+                    GM_xmlhttpRequest({
+                        method: "GET",
+                        url: `${jnks_job_url}/${build_no}/testReport/api/json?pretty=true`,
+                        onload: function(r) {
+                            build_obj = handleJenkinsTestResultResponse(r, e)
+                        },
+                        onerror: function(r) {
+                            build_obj = handleJenkinsRequestError(r, e)
+                        }
+                    });
+                })(el_markdown_body)
             }
         }
-    }
+    })
+}
+
+(()=>{
+    'use strict';
+    init();
+
+    // page load
+    document.addEventListener("pjax:end", init);
 })();
