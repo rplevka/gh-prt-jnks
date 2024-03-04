@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         gh-prt-jnks
 // @namespace    http://tampermonkey.net/
-// @version      2024-02-27
+// @version      2024-03-04
 // @description  append jenkins PRT build links in respective PRT bot comments
 // @author       rplevka@redhat.com
 // @match        https://github.com/SatelliteQE/*/pull/*
