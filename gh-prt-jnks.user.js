@@ -83,7 +83,7 @@ function appendProgressBar(data, el) {
 
 function appendResultContainer(data, el){
     data.suites[0].cases.forEach(function(c) {
-        if (c.status == "FAILED"){
+        if (["FAILED", "ERROR", "REGRESSION"].includes(c.status)){
             var el_details = document.createElement('details');
             if (settings.resultsLoadExpanded) {
                 el_details.setAttribute('open', '');
@@ -168,7 +168,7 @@ function init(){
     comments.forEach(function(comment) {
         // locate the author element and filter those from our bot
         var el_author = comment.getElementsByClassName("author");
-        if (el_author.length && el_author[0].innerHTML == settings.botUsername) {
+        if (el_author.length && el_author[0].innerHTML == settings.botUsername && comment.innerHTML.includes(settings.commentMatches)) {
             // we assume PRT bot comment contains `code` element
             var els_code = document.evaluate(
                 ".//code",
