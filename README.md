@@ -24,7 +24,9 @@ create a new user script in tampermonkey and add only the following header (do n
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=github.com
 // @run-at       document-end
 // @connect      {JENKINS_DOMAIN}
+// @resource jnks-err.png     https://www.jenkins.io/images/logos/fire/fire.png
 // @grant        GM_xmlhttpRequest
+// @grant        GM_getResourceURL
 // @require      file:///{LOCAL_PATH_TO_THIS_REPO}/settings.js
 // @require      file:///{LOCAL_PATH_TO_THIS_REPO}/gh-prt-jnks.user.js
 // ==/UserScript==
