@@ -1,7 +1,0 @@
-const settings = {
-    botUsername: "Satellite-QE",
-    commentMatches: "<strong>PRT Result</strong>",
-    commentPattern: /(Build Number: )(\d+)/,
-    jenkinsJobUrl: `{JENKINS_URL}/job/${location.href.split('/')[4]}-pr-testing`,
-    resultsLoadExpanded: true
-}
