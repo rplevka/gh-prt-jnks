@@ -1,16 +1,18 @@
 // ==UserScript==
 // @name         gh-prt-jnks
 // @namespace    http://tampermonkey.net/
-// @version      2024-03-04
+// @version      2024-03-12
 // @description  append jenkins PRT build links in respective PRT bot comments
 // @author       rplevka@redhat.com
-// @match        https://github.com/SatelliteQE/*/pull/*
+// @match        https://github.com/*/pull/*
 // @run-at       document-end
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=github.com
-// @connect      {JENKINS_DOMAIN}
+// @connect      redhat.com
 // @resource jnks-err.png     https://www.jenkins.io/images/logos/fire/fire.png
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getResourceURL
+// @grant        GM_getValue
+// @grant        GM_setValue
 // ==/UserScript==
 
 
@@ -85,7 +87,8 @@ function appendResultContainer(data, el){
     data.suites[0].cases.forEach(function(c) {
         if (["FAILED", "ERROR", "REGRESSION"].includes(c.status)){
             var el_details = document.createElement('details');
-            if (settings.resultsLoadExpanded) {
+            console.log(GM_getValue('resultsLoadExpanded'));
+            if (GM_getValue('resultsLoadExpanded')) {
                 el_details.setAttribute('open', '');
             }
             var el_summary = document.createElement('summary');
@@ -128,26 +131,30 @@ function handleJenkinsTestResultResponse(r, el) {
 
 function handleJenkinsRequestError(r, el) {
     /* append element with error message
-       regarding failure to fetch data from jenkins
+        regarding failure to fetch data from jenkins
     */
-   el_err_msg = document.createElement('div');
-   el_err_msg.classList.add('blankslate');
+    el_err_msg = document.createElement('div');
+    el_err_msg.classList.add('blankslate');
 
-   el_err_msg_img = document.createElement('img');
-   el_err_msg_img.setAttribute('src', GM_getResourceURL('jnks-err.png'));
+    el_err_msg_img = document.createElement('img');
+    el_err_msg_img.setAttribute('src', GM_getResourceURL('jnks-err.png'));
 
-   el_err_msg_img.classList.add('blankslate-image');
+    el_err_msg_img.classList.add('blankslate-image');
 
-   el_err_msg_header = document.createElement('h3');
-   el_err_msg_header.classList.add('blankslate-heading');
-   el_err_msg_header.appendChild(document.createTextNode('Jenkins connection error'));
-   el_err_msg_text = document.createElement('p');
-   el_err_msg_text.appendChild(document.createTextNode(`The http request to the jenkins instance failed with status: ${r.status}`));
-   el_err_msg_header.appendChild(el_err_msg_text);
+    el_err_msg_header = document.createElement('h3');
+    el_err_msg_header.classList.add('blankslate-heading');
+    el_err_msg_header.appendChild(document.createTextNode('Jenkins connection error'));
+    el_err_msg_text = document.createElement('p');
+    el_err_msg_text.appendChild(
+        document.createTextNode(
+            `The http request to the jenkins instance failed with status: ${r.status}, ${r.finalUrl}`
+        )
+    );
+    el_err_msg_header.appendChild(el_err_msg_text);
 
-   el_err_msg.appendChild(el_err_msg_img);
-   el_err_msg.appendChild(el_err_msg_header);
-   el.appendChild(el_err_msg);
+    el_err_msg.appendChild(el_err_msg_img);
+    el_err_msg.appendChild(el_err_msg_header);
+    el.appendChild(el_err_msg);
 }
 
 function init(){
@@ -168,7 +175,7 @@ function init(){
     comments.forEach(function(comment) {
         // locate the author element and filter those from our bot
         var el_author = comment.getElementsByClassName("author");
-        if (el_author.length && el_author[0].innerHTML == settings.botUsername && comment.innerHTML.includes(settings.commentMatches)) {
+        if (el_author.length && el_author[0].innerHTML == GM_getValue("botUsername") && comment.innerHTML.includes(GM_getValue("commentMatches"))) {
             // we assume PRT bot comment contains `code` element
             var els_code = document.evaluate(
                 ".//code",
@@ -185,17 +192,23 @@ function init(){
                 el_markdown_body = el_code.parentElement.parentElement.parentElement;
                 //console.log(el_code);
                 console.log(el_markdown_body);
-                var build_no = el_code.innerHTML.match(settings.commentPattern)[2];
+                commentPattern = new RegExp(GM_getValue("commentPattern"));
+                console.log(commentPattern);
+                var build_no = el_code.innerHTML.match(commentPattern)[2];
+                var jenkinsJobUrlResolved = GM_getValue('jenkinsJobUrl').replace(
+                    /\{PROJECT\}/,
+                    `${location.href.split('/')[4]}`
+                )
                 var replacement = el_code.innerHTML.replace(
-                    settings.commentPattern,
-                    `$1<a href='${settings.jenkinsJobUrl}/$2' target='_blank'>$2</a>`
+                    commentPattern,
+                    `$1<a href='${jenkinsJobUrlResolved}/$2' target='_blank'>$2</a>`
                 );
                 el_code.innerHTML = replacement;
                 var build_obj;
                 (function(e){
                     GM_xmlhttpRequest({
                         method: "GET",
-                        url: `${settings.jenkinsJobUrl}/${build_no}/testReport/api/json?pretty=true`,
+                        url: `${jenkinsJobUrlResolved}/${build_no}/testReport/api/json?pretty=true`,
                         onload: function(r) {
                             build_obj = handleJenkinsTestResultResponse(r, e)
                         },
@@ -209,8 +222,38 @@ function init(){
     })
 }
 
+function seedSettings(){
+    /*
+    one-shot function that should insert the default settings
+    into the userscript storage if they are not set yet.
+    It can eventually contain version migration logic as well
+    */
+
+    const defaultSettings = new Map([
+        ["botUsername", "Satellite-QE"],
+        ["commentMatches", "<strong>PRT Result</strong>"],
+        ["commentPattern", "(Build Number: )(\\d+)"],
+        ["jenkinsJobUrl", `{JENKINS_URL}/job/{PROJECT}-pr-testing`],
+        ["resultsLoadExpanded", 1]
+    
+    ])
+    
+    defaultSettings.forEach(
+      function(v,k){
+        if (GM_getValue(k) == null){
+          console.log(`setting "${k}" not set yet, setting to default`);
+          GM_setValue(k, v);
+        }
+        else{
+          console.log(`setting "${k}" already set (${GM_getValue(k)}), skipping`)
+        }
+      }
+    )
+}
+
 (()=>{
     'use strict';
+    seedSettings();
     init();
 
     // page load
